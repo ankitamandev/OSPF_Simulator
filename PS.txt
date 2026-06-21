@@ -1,0 +1,31 @@
+ospf-router/
+├── CMakeLists.txt              build config — FetchContent pulls cpp-httplib, json, Catch2
+├── Dockerfile                  backend container (builds + runs ospf_router)
+├── docker-compose.yml          one-command full-stack deploy (backend + frontend)
+├── README.md                   project docs, API reference, build instructions
+│
+├── src/
+│   ├── Graph.h / Graph.cpp     weighted adjacency list — the network topology
+│   ├── Dijkstra.h / Dijkstra.cpp   SPF algorithm from scratch, min-heap based
+│   ├── LSDB.h / LSDB.cpp       Link State Database — reconvergence + benchmarking timer
+│   ├── Server.h / Server.cpp   REST API, 5 endpoints, shared_mutex thread safety
+│   ├── main.cpp                entry point — starts the server on port 8080
+│   └── benchmark.cpp           standalone executable — prints avg/p50/p99 reconvergence µs
+│
+├── tests/
+│   ├── test_graph.cpp          7 tests — addEdge, removeEdge, neighbours, etc.
+│   ├── test_dijkstra.cpp       8 tests — shortest path, path reconstruction, unreachable nodes
+│   └── test_lsdb.cpp           7 tests — LSA freshness, failLink, reconvergence correctness
+│
+├── frontend/
+│   ├── index.html              Vite entry HTML
+│   ├── package.json            React + D3 dependencies
+│   ├── vite.config.js          dev server config (port 5173)
+│   ├── Dockerfile               frontend container (nginx serving the build)
+│   └── src/
+│       ├── main.jsx            React root render
+│       └── App.jsx             D3 force graph + route/fail query forms, live API calls
+│
+└── scripts/
+    ├── seed_topology.sh        loads a 10-router sample network via curl
+    └── run_benchmark.sh        runs benchmark.cpp and saves timestamped results
