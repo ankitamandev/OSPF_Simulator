@@ -29,4 +29,5 @@ private:
     void handleGetRoute(const httplib::Request& req, httplib::Response& res);
     void handlePostFail(const httplib::Request& req, httplib::Response& res);
     void handleGetTable(const httplib::Request& req, httplib::Response& res);
+    void handlePostRestore(const httplib::Request& req, httplib::Response& res);
 };

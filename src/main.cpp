@@ -13,6 +13,7 @@ int main() {
     std::cout << "  GET  /route?src=&dst=  - shortest path query\n";
     std::cout << "  POST /fail             - simulate link failure {u, v}\n";
     std::cout << "  GET  /table/:id        - full routing table for a router\n\n";
+    std::cout << "  POST /restore          - restore a failed link {u, v, cost}\n";
 
     server.start(8080);
     return 0;

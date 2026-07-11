@@ -34,7 +34,7 @@ FetchContent_Declare(
 
 FetchContent_MakeAvailable(httplib json Catch2)
 
-# ---- Core library (shared between main app, benchmark, and tests) ----
+# Core library (shared between main app, benchmark, and tests) ----
 add_library(ospf_core
   src/Graph.cpp
   src/Dijkstra.cpp
@@ -43,20 +43,20 @@ add_library(ospf_core
 target_include_directories(ospf_core PUBLIC src)
 target_link_libraries(ospf_core PUBLIC nlohmann_json::nlohmann_json)
 
-# ---- Main server executable ----
+# Main server executable 
 add_executable(ospf_router
   src/main.cpp
   src/Server.cpp
 )
 target_link_libraries(ospf_router PRIVATE ospf_core httplib::httplib)
 
-# ---- Benchmark executable ----
+# Benchmark executable
 add_executable(benchmark
   src/benchmark.cpp
 )
 target_link_libraries(benchmark PRIVATE ospf_core)
 
-# ---- Tests ----
+# Tests 
 enable_testing()
 add_executable(ospf_tests
   tests/test_graph.cpp

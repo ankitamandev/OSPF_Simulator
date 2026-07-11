@@ -45,6 +45,10 @@ void Server::registerRoutes() {
     svr_.Options(R"(.*)", [](const httplib::Request&, httplib::Response& res) {
         res.status = 204;
     });
+
+    svr_.Post("/restore", [this](const httplib::Request& req, httplib::Response& res) {
+    handlePostRestore(req, res);
+});
 }
 
 // GET /topology — returns the current graph as {nodes, edges}.
@@ -180,4 +184,31 @@ void Server::handleGetTable(const httplib::Request& req, httplib::Response& res)
     }
 
     res.set_content(table.dump(), "application/json");
+}
+
+// POST /restore — restores a previously failed link {u, v, cost} and returns reconvergence time.
+// If cost is omitted from the request body it defaults to 10.
+// WRITE: unique_lock.
+void Server::handlePostRestore(const httplib::Request& req, httplib::Response& res) {
+    std::unique_lock lock(graphMu_);
+
+    try {
+        json body = json::parse(req.body);
+        int u = body["u"].get<int>();
+        int v = body["v"].get<int>();
+        int cost = body.value("cost", 10); // default cost 10 if not provided
+
+        int src = lsdb_.all().empty() ? u : lsdb_.all().begin()->first;
+        long long us = lsdb_.restoreLink(u, v, cost, src);
+
+        json response = {
+            {"reconverge_us", us},
+            {"restored_link", {{"u", u}, {"v", v}, {"cost", cost}}}
+        };
+        res.set_content(response.dump(), "application/json");
+    } catch (const std::exception& e) {
+        res.status = 400;
+        json err = {{"error", e.what()}};
+        res.set_content(err.dump(), "application/json");
+    }
 }
