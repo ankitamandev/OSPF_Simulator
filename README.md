@@ -30,35 +30,31 @@ cd build && ctest --output-on-failure && cd ..
 ./build/benchmark 50 1000
 
 # Start the server
-./build/ospf_router
-\`\`\`
+ 
+Command :  `./build/ospf_router`
 
 In a separate terminal, seed a test topology and try the API:
 
-\`\`\`bash
-chmod +x scripts/seed_topology.sh
-./scripts/seed_topology.sh
+`chmod +x scripts/seed_topology.sh`  
+`./scripts/seed_topology.sh`
 
-curl "http://localhost:8080/route?src=1&dst=10"
-curl "http://localhost:8080/table/1"
-curl -X POST http://localhost:8080/fail -H "Content-Type: application/json" -d '{"u":1,"v":2}'
-\`\`\`
+`curl "http://localhost:8080/route?src=1&dst=10"`
+
+`curl "http://localhost:8080/table/1"`  
+`curl -X POST http://localhost:8080/fail -H "Content-Type: application/json" -d '{"u":1,"v":2}'  `
 
 ## Run the frontend
 
-\`\`\`bash
-cd frontend
-npm install
-npm run dev
-\`\`\`
+`cd frontend`  
+`npm install`  
+`npm run dev`
+
 
 Open `http://localhost:5173`.
 
 ## Run everything with Docker
 
-\`\`\`bash
-docker compose up --build
-\`\`\`
+`docker compose up --build`
 
 Backend on `localhost:8080`, frontend on `localhost:3000`.
 
@@ -92,13 +88,10 @@ A router typically has 4-8 physical neighbours regardless of network size. An ad
 ## Benchmark results
 
 Run `./build/benchmark 50 1000` to see results 
+
 for example :-
-\`\`\`
-min : 14 us
-avg : 42 us
-p50 : 39 us
-p99 : 91 us
+min : 14 us  
+avg : 42 us  
+p50 : 39 us  
+p99 : 91 us  
 max : 109 us
-
-\`\`\`
-

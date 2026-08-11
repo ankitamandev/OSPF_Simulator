@@ -8,4 +8,3 @@ Results over 975 trials:
   p99 : 91 us
   max : 109 us
 
-Copy the avg/p99 numbers above into your resume bullet.

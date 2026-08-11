@@ -32,7 +32,7 @@ public:
     // Simulates a link failure between routers u and v: removes the
     // edge from both routers' LSAs (bumping their sequence numbers)
     // and updates the LSDB. Returns the reconvergence time in
-    // microseconds (rebuild graph + re-run Dijkstra from `src`).
+    // microseconds (rebuild graph + re-run Dijkstra from src).
     long long failLink(int u, int v, int src);
 
     // Restores a previously failed link with the given cost.
@@ -48,5 +48,5 @@ public:
     const std::map<int, LSA>& all() const { return db; }
 
 private:
-    std::map<int, LSA> db; // routerID -> its LSA
+    std::map<int, LSA> db; 
 };
