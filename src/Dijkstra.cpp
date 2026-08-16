@@ -1,16 +1,15 @@
 #include "Dijkstra.h"
 #include <queue>
 
-// Implements OSPF's Shortest Path First computation — RFC 2328 §16.1.
-//
+// OSPF Shortest Path First computation
+
 // Uses std::priority_queue as a min-heap over {distance, node} pairs.
 // Lazy deletion handles stale heap entries: when a node is popped whose
 // recorded distance no longer matches the best known distance, it means
 // a better path was already found and processed, so we simply skip it
 // rather than maintaining a decrease-key operation (which std::priority_queue
 // doesn't support natively).
-std::pair<std::map<int, int>, std::map<int, int>>
-dijkstra(const Graph &g, int src)
+std::pair<std::map<int, int>, std::map<int, int>> dijkstra(const Graph &g, int src)
 {
     std::map<int, int> dist;
     std::map<int, int> parent;
@@ -55,8 +54,7 @@ dijkstra(const Graph &g, int src)
     return {dist, parent};
 }
 
-std::vector<int> reconstructPath(const std::map<int, int> &parent,
-                                 int src, int dst)
+std::vector<int> reconstructPath(const std::map<int, int> &parent, int src, int dst)
 {
     if (src == dst)
         return {src};
@@ -70,8 +68,8 @@ std::vector<int> reconstructPath(const std::map<int, int> &parent,
         auto it = parent.find(current);
         if (it == parent.end())
         {
-            // No path exists from src to dst.
             return {};
+            // if no path is found
         }
         current = it->second;
     }

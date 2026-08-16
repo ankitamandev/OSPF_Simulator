@@ -8,8 +8,6 @@ void LSDB::update(const LSA& lsa) {
     if (it == db.end() || lsa.seqNum > it->second.seqNum) {
         db[lsa.routerID] = lsa;
     }
-    // Otherwise: stale update, silently ignored — mirrors real OSPF
-    // behaviour of rejecting LSAs with an old sequence number.
 }
 
 Graph LSDB::buildGraph() const {
@@ -17,10 +15,7 @@ Graph LSDB::buildGraph() const {
     for (const auto& [routerID, lsa] : db) {
         g.addNode(routerID);
         for (const auto& [neighbourID, cost] : lsa.neighbours) {
-            // addEdge is called once per direction naturally, since
-            // both routers in a link carry the other in their LSA.
-            // To avoid duplicate edges we only add when routerID < neighbourID,
-            // then addEdge itself inserts both directions.
+            
             if (routerID < neighbourID) {
                 g.addEdge(routerID, neighbourID, cost);
             } else {
@@ -94,4 +89,8 @@ long long LSDB::reconverge(int src) const {
 
     auto t1 = std::chrono::high_resolution_clock::now();
     return std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
+}
+
+void LSDB::clear() {
+    db.clear();
 }

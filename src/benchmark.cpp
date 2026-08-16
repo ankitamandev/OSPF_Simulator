@@ -1,8 +1,5 @@
-// Benchmarks reconvergence latency: how long it takes the routing
-// engine to rebuild its graph and re-run Dijkstra after a link
-// failure. Run this and use the printed avg/p99 numbers as your
-// resume metric — never invent a number, always measure it here.
-//
+// Benchmarks reconvergence latency( how long it takes the routing engine to rebuild its graph
+// and re-run Dijkstra after a link failure 
 // Usage: ./build/benchmark [num_nodes] [num_trials]
 //   e.g. ./build/benchmark 50 1000
 

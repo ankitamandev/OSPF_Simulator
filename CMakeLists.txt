@@ -39,6 +39,7 @@ add_library(ospf_core
   src/Graph.cpp
   src/Dijkstra.cpp
   src/LSDB.cpp
+  src/DefaultTopology.cpp
 )
 target_include_directories(ospf_core PUBLIC src)
 target_link_libraries(ospf_core PUBLIC nlohmann_json::nlohmann_json)

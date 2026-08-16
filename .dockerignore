@@ -1,0 +1,8 @@
+cd ~/projects/ospf-router
+cat > .dockerignore << 'EOF'
+build/
+frontend/node_modules/
+frontend/dist/
+.git/
+*.md
+EOF

@@ -3,6 +3,7 @@
 #include <nlohmann/json.hpp>
 #include <iostream>
 #include <set>
+#include "DefaultTopology.h" 
 
 using json = nlohmann::json;
 
@@ -36,7 +37,11 @@ void Server::registerRoutes() {
         handleGetTable(req, res);
     });
 
-    // Basic CORS so the React frontend (different port) can call this API.
+    svr_.Post("/reset", [this](const httplib::Request& req, httplib::Response& res) {
+        handlePostReset(req, res);
+    });
+
+    // CORS for the React frontend
     svr_.set_default_headers({
         {"Access-Control-Allow-Origin", "*"},
         {"Access-Control-Allow-Methods", "GET, POST, OPTIONS"},
@@ -48,10 +53,11 @@ void Server::registerRoutes() {
 
     svr_.Post("/restore", [this](const httplib::Request& req, httplib::Response& res) {
     handlePostRestore(req, res);
+
 });
 }
 
-// GET /topology — returns the current graph as {nodes, edges}.
+// GET /topology this returns the current graph as {nodes, edges}
 // READ: shared_lock allows this to run concurrently with other reads.
 void Server::handleGetTopology(const httplib::Request&, httplib::Response& res) {
     std::shared_lock lock(graphMu_);
@@ -75,8 +81,8 @@ void Server::handleGetTopology(const httplib::Request&, httplib::Response& res) 
     res.set_content(response.dump(), "application/json");
 }
 
-// POST /topology — loads a fresh topology from JSON {nodes, edges}.
-// WRITE: unique_lock blocks all reads/writes until this completes.
+// POST /topology — loads a fresh topology from JSON {nodes, edges}
+// WRITE: unique_lock blocks all reads/writes until this completes
 void Server::handlePostTopology(const httplib::Request& req, httplib::Response& res) {
     std::unique_lock lock(graphMu_);
 
@@ -110,7 +116,7 @@ void Server::handlePostTopology(const httplib::Request& req, httplib::Response& 
     }
 }
 
-// GET /route?src=X&dst=Y — shortest path between two routers.
+// GET /route?src=X&dst=Y  shortest path between two routers.
 // READ: shared_lock.
 void Server::handleGetRoute(const httplib::Request& req, httplib::Response& res) {
     std::shared_lock lock(graphMu_);
@@ -211,4 +217,20 @@ void Server::handlePostRestore(const httplib::Request& req, httplib::Response& r
         json err = {{"error", e.what()}};
         res.set_content(err.dump(), "application/json");
     }
+}
+
+// reset after link failures without restarting the server.
+// POST /reset — clears the LSDB and reloads the default 20-router topology
+// WRITE: unique_lock.
+void Server::handlePostReset(const httplib::Request&, httplib::Response& res) {
+    std::unique_lock lock(graphMu_);
+
+    lsdb_.clear();           
+    loadDefaultTopology(lsdb_);
+
+    json response = {
+        {"status", "reset"},
+        {"routers", lsdb_.routerCount()}
+    };
+    res.set_content(response.dump(), "application/json");
 }
