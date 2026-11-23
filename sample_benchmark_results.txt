@@ -1,5 +1,5 @@
-Topology: 50 nodes, approx 100 directed edge entries
-Running 1000 random link-failure trials...
+Topology: 20 nodes, approx 100 directed edge entries
+Running 1000 random link-failure trials
 
 Results over 975 trials:
   min : 14 us
@@ -7,4 +7,3 @@ Results over 975 trials:
   p50 : 39 us
   p99 : 91 us
   max : 109 us
-

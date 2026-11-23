@@ -10,22 +10,19 @@ struct Edge {
     int cost;
 };
 
-// Weighted undirected graph representing the network topology.
-// Routers are integer node IDs. Physical links are bidirectional
-// weighted edges. Stored as an adjacency list — O(V+E) space,
-// O(degree) neighbour traversal — the right choice for sparse
-// networks where each router has only a handful of neighbours.
+// Weighted undirected graph. No longer used on the reconvergence path —
+// SPF now runs directly on the LSDB. Kept as a general-purpose topology
+// type for unit tests and for any caller that wants a standalone graph.
 class Graph {
 public:
     std::unordered_map<int, std::vector<Edge>> adj;
 
     // Inserts u→v and v→u so the link is undirected.
+    // operator[] default-constructs a missing key, so both nodes exist
+    // after this call without any extra guard.
     void addEdge(int u, int v, int cost) {
         adj[u].push_back({v, cost});
         adj[v].push_back({u, cost});
-        // Ensure both nodes exist as keys even with no other edges.
-        if (adj.find(u) == adj.end()) adj[u] = {};
-        if (adj.find(v) == adj.end()) adj[v] = {};
     }
 
     // Removes both directions of the link between u and v.
@@ -50,6 +47,13 @@ public:
     // Ensures a node exists in the graph even with no edges yet.
     void addNode(int id) {
         if (adj.find(id) == adj.end()) adj[id] = {};
+    }
+
+    // Largest router ID present — SPF sizes its arrays from this.
+    int maxRouterId() const {
+        int m = 0;
+        for (const auto& [id, _] : adj) m = std::max(m, id);
+        return m;
     }
 
     size_t nodeCount() const { return adj.size(); }

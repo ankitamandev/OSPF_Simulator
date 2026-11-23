@@ -1,6 +1,4 @@
 #include "LSDB.h"
-#include "Dijkstra.h"
-#include <chrono>
 #include <algorithm>
 
 void LSDB::update(const LSA& lsa) {
@@ -10,85 +8,76 @@ void LSDB::update(const LSA& lsa) {
     }
 }
 
-Graph LSDB::buildGraph() const {
-    Graph g;
-    for (const auto& [routerID, lsa] : db) {
-        g.addNode(routerID);
-        for (const auto& [neighbourID, cost] : lsa.neighbours) {
-            
-            if (routerID < neighbourID) {
-                g.addEdge(routerID, neighbourID, cost);
-            } else {
-                g.addNode(routerID);
-            }
+// Removes neighbour from one LSA. Returns true if anything was removed.
+static bool eraseNeighbour(LSA& lsa, int neighbourID) {
+    auto& n = lsa.neighbours;
+    auto newEnd = std::remove_if(n.begin(), n.end(),
+        [neighbourID](const std::pair<int, int>& p) { return p.first == neighbourID; });
+    bool changed = newEnd != n.end();
+    n.erase(newEnd, n.end());
+    return changed;
+}
+
+// Sets neighbour's cost in one LSA, adding it if absent.
+// Returns true if anything changed.
+static bool upsertNeighbour(LSA& lsa, int neighbourID, int cost) {
+    for (auto& [id, c] : lsa.neighbours) {
+        if (id == neighbourID) {
+            if (c == cost) return false;
+            c = cost;
+            return true;
         }
     }
-    return g;
+    lsa.neighbours.push_back({neighbourID, cost});
+    return true;
 }
 
-static void removeNeighbourFromLSA(LSA& lsa, int neighbourID) {
-    lsa.neighbours.erase(
-        std::remove_if(lsa.neighbours.begin(), lsa.neighbours.end(),
-            [neighbourID](const std::pair<int, int>& p) {
-                return p.first == neighbourID;
-            }),
-        lsa.neighbours.end());
+bool LSDB::removeLink(int u, int v) {
+    auto iu = db.find(u), iv = db.find(v);
+    if (iu == db.end() || iv == db.end()) return false;
+
+    LSA a = iu->second, b = iv->second;
+    bool changedA = eraseNeighbour(a, v);
+    bool changedB = eraseNeighbour(b, u);
+    if (!changedA && !changedB) return false;
+
+    // Re-originate each changed LSA with a higher sequence number.
+    if (changedA) { a.seqNum++; update(a); }
+    if (changedB) { b.seqNum++; update(b); }
+    return true;
 }
 
-long long LSDB::failLink(int u, int v, int src) {
-    auto t0 = std::chrono::high_resolution_clock::now();
+bool LSDB::setLink(int u, int v, int cost) {
+    if (u == v || cost <= 0) return false;
+    auto iu = db.find(u), iv = db.find(v);
+    if (iu == db.end() || iv == db.end()) return false;
 
-    if (db.count(u)) {
-        LSA updated = db[u];
-        removeNeighbourFromLSA(updated, v);
-        updated.seqNum++;
-        update(updated);
-    }
-    if (db.count(v)) {
-        LSA updated = db[v];
-        removeNeighbourFromLSA(updated, u);
-        updated.seqNum++;
-        update(updated);
-    }
+    LSA a = iu->second, b = iv->second;
+    bool changedA = upsertNeighbour(a, v, cost);
+    bool changedB = upsertNeighbour(b, u, cost);
+    if (!changedA && !changedB) return false;
 
-    Graph g = buildGraph();
-    auto [dist, parent] = dijkstra(g, src);
-
-    auto t1 = std::chrono::high_resolution_clock::now();
-    return std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
+    if (changedA) { a.seqNum++; update(a); }
+    if (changedB) { b.seqNum++; update(b); }
+    return true;
 }
 
-long long LSDB::restoreLink(int u, int v, int cost, int src) {
-    auto t0 = std::chrono::high_resolution_clock::now();
-
-    if (db.count(u)) {
-        LSA updated = db[u];
-        updated.neighbours.push_back({v, cost});
-        updated.seqNum++;
-        update(updated);
-    }
-    if (db.count(v)) {
-        LSA updated = db[v];
-        updated.neighbours.push_back({u, cost});
-        updated.seqNum++;
-        update(updated);
-    }
-
-    Graph g = buildGraph();
-    auto [dist, parent] = dijkstra(g, src);
-
-    auto t1 = std::chrono::high_resolution_clock::now();
-    return std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
+std::optional<int> LSDB::linkCost(int u, int v) const {
+    auto it = db.find(u);
+    if (it == db.end()) return std::nullopt;
+    for (const auto& [id, c] : it->second.neighbours)
+        if (id == v) return c;
+    return std::nullopt;
 }
 
-long long LSDB::reconverge(int src) const {
-    auto t0 = std::chrono::high_resolution_clock::now();
+const std::vector<std::pair<int, int>>& LSDB::neighbours(int id) const {
+    static const std::vector<std::pair<int, int>> empty;
+    auto it = db.find(id);
+    return it != db.end() ? it->second.neighbours : empty;
+}
 
-    Graph g = buildGraph();
-    auto [dist, parent] = dijkstra(g, src);
-
-    auto t1 = std::chrono::high_resolution_clock::now();
-    return std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
+int LSDB::maxRouterId() const {
+    return db.empty() ? 0 : db.rbegin()->first;
 }
 
 void LSDB::clear() {

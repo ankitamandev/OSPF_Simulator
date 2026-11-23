@@ -1,95 +1,85 @@
 #include <catch2/catch_test_macros.hpp>
 #include "LSDB.h"
 #include "Dijkstra.h"
+#include "DefaultTopology.h"
+
+static LSDB threeRouters() {
+    // 1-2 cost 5 (direct), 1-3 cost 10, 2-3 cost 10
+    LSDB db;
+    for (int i = 1; i <= 3; i++) db.update(LSA{i, {}, 1});
+    db.setLink(1, 2, 5);
+    db.setLink(1, 3, 10);
+    db.setLink(2, 3, 10);
+    return db;
+}
 
 TEST_CASE("stale LSA with lower sequence number is rejected", "[lsdb]") {
     LSDB db;
-    LSA fresh{1, {{2, 10}}, 5};
-    LSA stale{1, {{2, 99}}, 2}; // lower seqNum — should be ignored
-
-    db.update(fresh);
-    db.update(stale);
-
-    Graph g = db.buildGraph();
-    REQUIRE(g.neighbours(1)[0].cost == 10); // fresh value retained
+    db.update(LSA{1, {{2, 10}}, 5});
+    db.update(LSA{1, {{2, 99}}, 2});
+    REQUIRE(db.linkCost(1, 2) == 10);
 }
 
 TEST_CASE("fresher LSA overwrites older one", "[lsdb]") {
     LSDB db;
-    LSA v1{1, {{2, 10}}, 1};
-    LSA v2{1, {{2, 25}}, 2}; // higher seqNum — should win
-
-    db.update(v1);
-    db.update(v2);
-
-    Graph g = db.buildGraph();
-    REQUIRE(g.neighbours(1)[0].cost == 25);
-}
-
-TEST_CASE("buildGraph reconstructs correct adjacency from LSAs", "[lsdb]") {
-    LSDB db;
     db.update(LSA{1, {{2, 10}}, 1});
-    db.update(LSA{2, {{1, 10}, {3, 20}}, 1});
-    db.update(LSA{3, {{2, 20}}, 1});
-
-    Graph g = db.buildGraph();
-
-    REQUIRE(g.nodeCount() == 3);
-    REQUIRE(g.neighbours(2).size() == 2);
+    db.update(LSA{1, {{2, 25}}, 2});
+    REQUIRE(db.linkCost(1, 2) == 25);
 }
 
-TEST_CASE("failLink removes the edge from the rebuilt graph", "[lsdb]") {
-    LSDB db;
-    db.update(LSA{1, {{2, 10}}, 1});
-    db.update(LSA{2, {{1, 10}, {3, 20}}, 1});
-    db.update(LSA{3, {{2, 20}}, 1});
-
-    db.failLink(1, 2, 3);
-
-    Graph g = db.buildGraph();
-    REQUIRE(g.neighbours(1).empty());
-    REQUIRE(g.neighbours(2).size() == 1);
-    REQUIRE(g.neighbours(2)[0].to == 3);
+TEST_CASE("setLink creates the link on both routers", "[lsdb]") {
+    LSDB db = threeRouters();
+    REQUIRE(db.linkCost(1, 2) == 5);
+    REQUIRE(db.linkCost(2, 1) == 5);
+    REQUIRE(db.neighbours(2).size() == 2);
 }
 
-TEST_CASE("failLink returns a measurable, non-negative reconvergence time", "[lsdb]") {
-    LSDB db;
-    db.update(LSA{1, {{2, 10}}, 1});
-    db.update(LSA{2, {{1, 10}}, 1});
+TEST_CASE("removeLink removes both directions and bumps sequence numbers", "[lsdb]") {
+    LSDB db = threeRouters();
+    int seq1 = db.all().at(1).seqNum, seq2 = db.all().at(2).seqNum;
 
-    long long us = db.failLink(1, 2, 1);
-
-    REQUIRE(us >= 0);
+    REQUIRE(db.removeLink(1, 2));
+    REQUIRE_FALSE(db.linkCost(1, 2));
+    REQUIRE_FALSE(db.linkCost(2, 1));
+    REQUIRE(db.all().at(1).seqNum == seq1 + 1);
+    REQUIRE(db.all().at(2).seqNum == seq2 + 1);
 }
 
-TEST_CASE("restoreLink adds the edge back", "[lsdb]") {
-    LSDB db;
-    db.update(LSA{1, {{2, 10}}, 1});
-    db.update(LSA{2, {{1, 10}}, 1});
+TEST_CASE("removing a link that doesn't exist changes nothing", "[lsdb]") {
+    LSDB db = threeRouters();
+    REQUIRE(db.removeLink(1, 2));
+    int seq1 = db.all().at(1).seqNum;
 
-    db.failLink(1, 2, 1);
-    db.restoreLink(1, 2, 15, 1);
-
-    Graph g = db.buildGraph();
-    REQUIRE(g.neighbours(1).size() == 1);
-    REQUIRE(g.neighbours(1)[0].cost == 15);
+    REQUIRE_FALSE(db.removeLink(1, 2));           // already gone
+    REQUIRE(db.all().at(1).seqNum == seq1);       // no re-origination
 }
 
-TEST_CASE("reconvergence updates shortest path after failure", "[lsdb]") {
-    // 1-2 (cost 5) is the cheap direct path.
-    // 1-3-2 (cost 10+10=20) is the fallback.
+TEST_CASE("setLink is idempotent and updates cost without duplicating", "[lsdb]") {
+    LSDB db = threeRouters();
+    REQUIRE_FALSE(db.setLink(1, 2, 5));           // same cost: no change
+    REQUIRE(db.setLink(1, 2, 7));                 // new cost: updated
+    REQUIRE(db.linkCost(1, 2) == 7);
+    REQUIRE(db.neighbours(1).size() == 2);        // still 2 neighbours, no duplicate
+}
+
+TEST_CASE("reconvergence reroutes around a failed link", "[lsdb]") {
+    LSDB db = threeRouters();
+    REQUIRE(dijkstra(db, 1).dist[2] == 5);        // direct
+
+    db.removeLink(1, 2);
+    auto after = dijkstra(db, 1);
+    REQUIRE(after.dist[2] == 20);                 // via router 3
+    REQUIRE(reconstructPath(after.parent, 1, 2) == std::vector<int>{1, 3, 2});
+}
+
+TEST_CASE("default topology reloads cleanly after failures", "[lsdb]") {
     LSDB db;
-    db.update(LSA{1, {{2, 5}, {3, 10}}, 1});
-    db.update(LSA{2, {{1, 5}, {3, 10}}, 1});
-    db.update(LSA{3, {{1, 10}, {2, 10}}, 1});
+    loadDefaultTopology(db);
+    REQUIRE(db.removeLink(8, 17));
+    REQUIRE(db.removeLink(17, 18));               // router 17 now isolated
 
-    Graph before = db.buildGraph();
-    auto [distBefore, _] = dijkstra(before, 1);
-    REQUIRE(distBefore[2] == 5); // direct path
-
-    db.failLink(1, 2, 1);
-
-    Graph after = db.buildGraph();
-    auto [distAfter, parentAfter] = dijkstra(after, 1);
-    REQUIRE(distAfter[2] == 20); // re-routed via node 3
+    loadDefaultTopology(db);                      // must not be rejected as stale
+    REQUIRE(db.routerCount() == 20);
+    REQUIRE(db.linkCost(8, 17) == 15);
+    REQUIRE(dijkstra(db, 1).dist[17] == 29);
 }

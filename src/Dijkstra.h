@@ -1,21 +1,62 @@
 #pragma once
 
-#include "Graph.h"
-#include <map>
 #include <vector>
-#include <utility>
+#include <queue>
 #include <climits>
+#include <utility>
 
-// Sentinel for "unreachable" which mirrors INT_MAX semantics used throughout
 constexpr int UNREACHABLE = INT_MAX;
+constexpr int NO_PARENT   = -1;
 
-// Runs Dijkstra's Shortest Path First (the same algorithm OSPF uses as per RFC 2328 16.1) from "src" to every other node in the graph
-//   dist   — dist[v] = shortest cost from src to v (Will show UNREACHABLE agar path nahi mila to)
-//   parent — parent[v] = previous node on the shortest path to v
+// Shortest path tree rooted at one router (RFC 2328 calls this the SPT).
+// Indexed directly by router ID: dist[v] is the cost from the root to v,
+// parent[v] is v's predecessor on that path. Router IDs are small dense
+// integers, so plain vectors replace the old std::map — one allocation
+// each instead of one heap node per router, and contiguous in memory.
+struct SPT {
+    std::vector<int> dist;
+    std::vector<int> parent;
+};
 
-// Complexity: O((V+E) log V) using a binary min-heap.
-std::pair<std::map<int, int>, std::map<int, int>> dijkstra(const Graph& g, int src);
+// Dijkstra's Shortest Path First — RFC 2328 §16.1.
+//
+// Templated on the topology type so it runs directly on the LSDB (the
+// production path) as well as on a Graph (unit tests). Any type works
+// if it provides:
+//     int  maxRouterId() const;
+//     neighbours(int u) const  -> iterable of {neighbourId, cost} pairs
+//
+// Uses a binary min-heap with lazy deletion: std::priority_queue has no
+// decrease-key, so a better path pushes a fresh entry and the outdated
+// one is skipped when it surfaces. O((V+E) log V).
+template <typename Topology>
+SPT dijkstra(const Topology& topo, int src) {
+    const int n = topo.maxRouterId() + 1;
+    SPT t{std::vector<int>(n, UNREACHABLE), std::vector<int>(n, NO_PARENT)};
+    if (src < 0 || src >= n) return t;
 
-// Reconstructs the full hop-by-hop path from src to dst using the parent map returned by dijkstra(). 
-// Returns an empty vector if dst is unreachable from src.
-std::vector<int> reconstructPath(const std::map<int, int>& parent, int src, int dst);
+    t.dist[src] = 0;
+    using Entry = std::pair<int, int>;                  // {distance, router}
+    std::priority_queue<Entry, std::vector<Entry>, std::greater<>> pq;
+    pq.push({0, src});
+
+    while (!pq.empty()) {
+        auto [d, u] = pq.top();
+        pq.pop();
+        if (d > t.dist[u]) continue;                    // stale entry
+
+        for (const auto& [v, w] : topo.neighbours(u)) {
+            if (v < 0 || v >= n) continue;
+            if (d + w < t.dist[v]) {
+                t.dist[v]   = d + w;
+                t.parent[v] = u;
+                pq.push({t.dist[v], v});
+            }
+        }
+    }
+    return t;
+}
+
+// this walks parent pointers back from dst to src and Returns an empty vector
+// if dst is unreachable or out of range. O(path length).
+std::vector<int> reconstructPath(const std::vector<int>& parent, int src, int dst);

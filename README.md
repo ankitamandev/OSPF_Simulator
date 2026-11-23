@@ -3,6 +3,7 @@
 A C++17 simulation of the OSPF (Open Shortest Path First) routing protocol — the link-state protocol standardised in RFC 2328 that runs inside enterprise networks and Cisco IOS devices. Implements Dijkstra's Shortest Path First algorithm from scratch, a Link State Database for topology flooding and reconvergence, a thread-safe REST API, and a live React + D3.js topology visualiser.
 
 ## Project Structure
+
 ```
 ospf-router/
 ├── CMakeLists.txt                     build config — FetchContent pulls cpp-httplib, json, Catch2
@@ -37,29 +38,28 @@ ospf-router/
 └── scripts/
     ├── seed_topology.sh               optional — reloads the 20-router topology via curl
     └── run_benchmark.sh               runs benchmark.cpp and saves timestamped results
-
 ```
 
 ## Architecture
 
-| Module           | Responsibility                                    | Key DSA / technique               |
-|------------------|---------------------------------------------------|-----------------------------------|
-| Graph            | Weighted adjacency list representing the network  | `unordered_map<int, vector<Edge>>`|
-| Dijkstra         | Shortest path computation from any source         | Min-heap, O((V+E) log V)          |
-| LSDB             | Link State Database — topology + reconvergence    | Sequence-numbered map updates     |
-| DefaultTopology  | 20-router enterprise campus network definition    | Loaded at startup and on reset    |
-| Server           | REST API exposing the engine over HTTP            | `std::shared_mutex` (reader-writer)|
-| Frontend         | Live topology visualisation                       | React + D3 force graph            |
+| Module          | Responsibility                                   | Key DSA / technique                   |
+| --------------- | ------------------------------------------------ | ------------------------------------- |
+| Graph           | Weighted adjacency list representing the network | `unordered_map<int, vector<Edge>>`  |
+| Dijkstra        | Shortest path computation from any source        | Min-heap, O((V+E) log V)              |
+| LSDB            | Link State Database — topology + reconvergence  | Sequence-numbered map updates         |
+| DefaultTopology | 20-router enterprise campus network definition   | Loaded at startup and on reset        |
+| Server          | REST API exposing the engine over HTTP           | `std::shared_mutex` (reader-writer) |
+| Frontend        | Live topology visualisation                      | React + D3 force graph                |
 
 ## Default topology
 
 A 20-router, 30-link enterprise campus network loads automatically at startup — no seeding required.
 
 | Tier         | Routers | Role                                |
-|--------------|---------|-------------------------------------|
-| Core         | 1–3     | Fully meshed backbone, cost 4 links |
-| Distribution | 4–8     | Connect core to access layer        |
-| Edge/Access  | 9–20    | End-point routers, redundant paths  |
+| ------------ | ------- | ----------------------------------- |
+| Core         | 1–3    | Fully meshed backbone, cost 4 links |
+| Distribution | 4–8    | Connect core to access layer        |
+| Edge/Access  | 9–20   | End-point routers, redundant paths  |
 
 ## Prerequisites
 
@@ -111,33 +111,32 @@ Open `http://localhost:5173`.
 docker compose up --build
 ```
 
-Backend on `localhost:8080`, frontend on `localhost:3000`.  
-The topology loads automatically nothing else to run.
+Backend on `localhost:8080`, frontend on `localhost:3000`.The topology loads automatically nothing else to run.
 
 > **Note:** a `.dockerignore` excluding `build/` and `frontend/node_modules/` is required. Without it, a locally generated `CMakeCache.txt` is copied into the image and CMake fails with a path-mismatch error.
 
 ## API reference
 
-| Method | Endpoint              | Body / Params           | Description                             |
-|--------|-----------------------|-------------------------|-----------------------------------------|
-| GET    | `/topology`           | —                       | Returns current graph `{nodes, edges}`  |
-| POST   | `/topology`           | `{nodes, edges}`        | Loads a custom topology                 |
-| GET    | `/route`              | `?src=X&dst=Y`          | Shortest path and cost between routers  |
-| GET    | `/table/:id`          | —                       | Full routing table for one router       |
-| POST   | `/fail`               | `{u, v}`                | Simulates a link failure                |
-| POST   | `/restore`            | `{u, v, cost}`          | Restores a failed link (cost default 10)|
-| POST   | `/reset`              | —                       | Reloads the default 20-router topology  |
+| Method | Endpoint       | Body / Params      | Description                              |
+| ------ | -------------- | ------------------ | ---------------------------------------- |
+| GET    | `/topology`  | —                 | Returns current graph `{nodes, edges}` |
+| POST   | `/topology`  | `{nodes, edges}` | Loads a custom topology                  |
+| GET    | `/route`     | `?src=X&dst=Y`   | Shortest path and cost between routers   |
+| GET    | `/table/:id` | —                 | Full routing table for one router        |
+| POST   | `/fail`      | `{u, v}`         | Simulates a link failure                 |
+| POST   | `/restore`   | `{u, v, cost}`   | Restores a failed link (cost default 10) |
+| POST   | `/reset`     | —                 | Reloads the default 20-router topology   |
 
 All read endpoints acquire a `shared_lock`; all write endpoints acquire a `unique_lock` on the same `std::shared_mutex`, allowing concurrent reads while serialising topology mutations.
 
 ## Algorithms and complexity
 
-| Operation                    | Complexity      |
-|------------------------------|-----------------|
-| Dijkstra's SPF               | O((V+E) log V)  |
-| Graph rebuild from LSDB      | O(V+E)          |
-| Adjacency list space         | O(V+E)          |
-| LSA update (sequence check)  | O(log V)        |
+| Operation                   | Complexity     |
+| --------------------------- | -------------- |
+| Dijkstra's SPF              | O((V+E) log V) |
+| Graph rebuild from LSDB     | O(V+E)         |
+| Adjacency list space        | O(V+E)         |
+| LSA update (sequence check) | O(log V)       |
 
 ## Why Dijkstra over Bellman-Ford
 
@@ -160,4 +159,3 @@ max : 109 µs
 ```
 
 Reproduce with `./build/benchmark 50 1000`.
-
